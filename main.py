@@ -2,15 +2,16 @@ import asyncio
 import aiohttp
 import json
 from eth_account import Account
+from mnemonic import Mnemonic
 import os
 
-API_ETH = "JPPXZJ51MRYMKWBXMPCU266M6DNK8J5MXR"
-API_BSC = "QQVKPQFWG7X2NU67549KEEH2RMVJS3KCPW"
-file_path = 'data.json'
+API_ETH = "YOUR_ETHERSCAN_KEY"
+API_BSC = "YOUR_BSCSCAN_KEY"
+file_path = "data.json"
 
-semaphore = asyncio.Semaphore(20)
+semaphore = asyncio.Semaphore(10)  # adjust based on API rate limits
 
-# Append result to file
+# Save found wallet
 def append_to_json(data):
     if os.path.exists(file_path):
         try:
@@ -20,65 +21,70 @@ def append_to_json(data):
             existing = []
     else:
         existing = []
-
     existing.append(data)
     with open(file_path, 'w') as f:
         json.dump(existing, f, indent=4)
 
-# Check Ethereum transactions
+# ETH checker
 async def check_eth(session, address):
-    url = f"https://api.etherscan.io/api?module=account&action=txlist&address={address}&startblock=0&endblock=99999999&sort=asc&apikey={API_ETH}"
     async with semaphore:
+        url = f"https://api.etherscan.io/api?module=account&action=txlist&address={address}&sort=asc&apikey={API_ETH}"
         try:
-            async with session.get(url) as resp:
+            async with session.get(url, timeout=10) as resp:
                 data = await resp.json()
                 return data.get("status") == "1" and len(data["result"]) > 0
-        except Exception as e:
-            print(f"[ETH ERROR] {e}")
+        except:
             return False
 
-# Check BSC transactions
+# BSC checker
 async def check_bsc(session, address):
-    url = f"https://api.bscscan.com/api?module=account&action=txlist&address={address}&startblock=0&endblock=99999999&sort=asc&apikey={API_BSC}"
     async with semaphore:
+        url = f"https://api.bscscan.com/api?module=account&action=txlist&address={address}&sort=asc&apikey={API_BSC}"
         try:
-            async with session.get(url) as resp:
+            async with session.get(url, timeout=10) as resp:
                 data = await resp.json()
                 return data.get("status") == "1" and len(data["result"]) > 0
-        except Exception as e:
-            print(f"[BSC ERROR] {e}")
+        except:
             return False
 
-# Keep checking until a wallet with txs is found
-async def hunt_until_found():
+# Check one wallet
+async def check_wallet(session, i):
+    acct, phrase = Account.create_with_mnemonic(num_words=24)
+    address = acct.address
+    print(f"🔍 Attempt {i}: {address[:10]}...")
+
+    eth = await check_eth(session, address)
+    if eth:
+        print(f"🎯 FOUND on ETH: {address}")
+        append_to_json({"phrase": phrase, "address": address, "chain": "ETH"})
+        return True
+
+    bsc = await check_bsc(session, address)
+    if bsc:
+        print(f"🎯 FOUND on BSC: {address}")
+        append_to_json({"phrase": phrase, "address": address, "chain": "BSC"})
+        return True
+
+    return False
+
+# Main loop
+async def main():
     Account.enable_unaudited_hdwallet_features()
     async with aiohttp.ClientSession() as session:
-        attempt = 0
+        i = 1
         while True:
-            attempt += 1
-            acct, phrase = Account.create_with_mnemonic(num_words=24)
-            address = acct.address
-            print(f"🔍 Attempt {attempt}: {address[:10]}...")
+            # Check 10 wallets in parallel
+            tasks = [check_wallet(session, i + j) for j in range(10)]
+            results = await asyncio.gather(*tasks)
 
-            eth_result, bsc_result = await asyncio.gather(
-                check_eth(session, address),
-                check_bsc(session, address)
-            )
+            if any(results):
+                break  # stop if any wallet has transactions
 
-            if eth_result or bsc_result:
-                chain = "ETH" if eth_result else "BSC"
-                print(f"🎯 FOUND on {chain}: {address}")
-                append_to_json({"phrase": phrase, "address": address, "chain": chain})
-                break  # Stop after finding one with txs
+            i += 10
 
 # Run it
 if __name__ == "__main__":
     try:
-        asyncio.run(hunt_until_found())
+        asyncio.run(main())
     except KeyboardInterrupt:
         print("\n🛑 Stopped by user.")
-
-        asyncio.run(main(loop_count=200))  # adjust to 500+ if needed
-    except KeyboardInterrupt:
-        print("\n🛑 Stopped by user.")
-
