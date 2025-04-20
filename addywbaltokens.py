@@ -2,10 +2,11 @@ import csv
 import time
 from web3 import Web3
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from web3.middleware import geth_poa_middleware
 
-# === Public BNB Full Node ===
-RPC_URL = "https://bsc-dataseed.binance.org"
-w3 = Web3(Web3.HTTPProvider(RPC_URL))
+w3 = Web3(Web3.HTTPProvider('https://bsc-dataseed.binance.org/'))
+w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
 
 if not w3.is_connected():
     raise ConnectionError("❌ Could not connect to BSC node")
