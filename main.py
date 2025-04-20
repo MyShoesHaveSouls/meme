@@ -10,8 +10,8 @@ import os
 file_path = 'data.json'
 
 # Your API keys
-API_ETH = "YOUR_ETHERSCAN_API_KEY"
-API_BSC = "YOUR_BSCSCAN_API_KEY"
+API_ETH = "JPPXZJ51MRYMKWBXMPCU266M6DNK8J5MXR"
+API_BSC = "QQVKPQFWG7X2NU67549KEEH2RMVJS3KCPW"
 
 # Max concurrent requests to avoid rate-limits
 semaphore = asyncio.Semaphore(3)
