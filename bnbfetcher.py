@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 bsc_rpc = "https://bsc-dataseed.binance.org/"
 web3 = Web3(Web3.HTTPProvider(bsc_rpc))
 
-if not web3.is_Connected():
+if not web3.is_connected():
     print("❌ Unable to connect to BNB Chain RPC")
     exit()
 
